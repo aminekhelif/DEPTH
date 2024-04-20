@@ -54,8 +54,10 @@ class CustomDataset(Data.Dataset):
             depth = pickle.load(f_depth)
         sample = {'image': img, 'depth': depth}
         if self.transform:
-            sample = self.transform(sample)
-        return sample
+            augmented = self.transform(image=img, depth=depth)
+            img, depth = augmented['image'], augmented['depth']
+
+        return {'image': img, 'depth': depth}
 
     def _reshape_and_convert_image(self, img):
         img_reshaped = np.empty((480, 640, 3), dtype='float32')
