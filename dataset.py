@@ -7,9 +7,10 @@ import torch.utils.data as Data
 import cv2
 
 class CustomDataset(Data.Dataset):
-    def __init__(self, dataset_path, transform=None):
+    def __init__(self, dataset_path, transform=None,mode = 'val'):
         self.dataset_path = dataset_path
         self.transform = transform
+        self.mode = mode
         self.data_file = 'nyu_depth_v2_labeled.mat'
         self.images_folder = os.path.join(dataset_path, 'images')
         self.depths_folder = os.path.join(dataset_path, 'depths')
@@ -28,6 +29,7 @@ class CustomDataset(Data.Dataset):
 
         with h5py.File(os.path.join(self.dataset_path, self.data_file), 'r') as f:
             N = len(f['images'])
+            print(f'dataset contain {N} images')
             for n in range(N):
                 if n % 200 == 0:
                     print(f'Processing image {n}...')
@@ -43,18 +45,20 @@ class CustomDataset(Data.Dataset):
             flag_file.write('Dataset converted.')
 
     def __len__(self):
-        return len(os.listdir(os.path.join(self.images_folder, 'train')))
+        return len(os.listdir(os.path.join(self.images_folder,self.mode)))
 
     def __getitem__(self, index):
-        img_path = os.path.join(self.images_folder, 'train', '{:05d}.p'.format(index))
-        depth_path = os.path.join(self.depths_folder, 'train', '{:05d}.p'.format(index))
+        img_path = os.path.join(self.images_folder,self.mode, '{:05d}.p'.format(index))
+        depth_path = os.path.join(self.depths_folder,self.mode, '{:05d}.p'.format(index))
         with open(img_path, 'rb') as f_img:
             img = pickle.load(f_img)
+            # uint8 image
+            img = img.astype('float32') / 255.0
         with open(depth_path, 'rb') as f_depth:
             depth = pickle.load(f_depth)
-        sample = {'image': img, 'depth': depth}
+            depth = depth.astype('float32')
         if self.transform:
-            augmented = self.transform(image=img, depth=depth)
+            augmented = self.transform({'image': img, 'depth': depth})
             img, depth = augmented['image'], augmented['depth']
 
         return {'image': img, 'depth': depth}
@@ -66,7 +70,9 @@ class CustomDataset(Data.Dataset):
         return img_reshaped
 
     def _reshape_and_convert_depth(self, depth):
-        depth_reshaped = depth.T.astype('float32')
+        depth_reshaped = np.empty((480, 640), dtype='float32')
+        depth_reshaped[ :, :] = depth.T
+        # depth_reshaped = depth.astype('float32')
         return depth_reshaped
 
     def _save_data(self, data, path):
